@@ -90,16 +90,19 @@ def _get_node_children(resp: Any) -> list[Any]:
     return []
 
 
-def _walk_atomic(resp: Any, callback: Callable[[AtomicObject, StructuredObject | None], None]) -> None:
-    """Depth-first search over response structure, invoking callback for each AtomicObject."""
-    def _recurse(node: Any, parent_structured: StructuredObject | None) -> None:
+def _walk_atomic(resp: Any, callback: Callable[[AtomicObject, StructuredObject | None], bool]) -> bool:
+    """Depth-first search over response structure, stopping early if callback returns True."""
+    def _recurse(node: Any, parent_structured: StructuredObject | None) -> bool:
         for item in _get_node_children(node):
             if isinstance(item, AtomicObject):
-                callback(item, parent_structured)
+                if callback(item, parent_structured):
+                    return True
             elif isinstance(item, StructuredObject):
-                _recurse(item, item)
+                if _recurse(item, item):
+                    return True
+        return False
 
-    _recurse(resp, resp if isinstance(resp, StructuredObject) else None)
+    return _recurse(resp, resp if isinstance(resp, StructuredObject) else None)
 
 
 def check_url(
@@ -116,12 +119,12 @@ def check_url(
         if not segment:
             continue
 
-        for ri in range(first, req_idx):
+        for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
                 continue
 
-            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> None:
+            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> bool:
                 if segment == atomic.value and V.evaluate_url_atomic_dep(
                     atomic,
                     source_node.request.url,
@@ -134,8 +137,11 @@ def check_url(
                     graph.edges.append(
                         make_edge("url", source_node, to_node, atomic, ri, req_idx, subPath=segment)
                     )
+                    return True
+                return False
 
-            _walk_atomic(responses[ri], evaluate_match)
+            if _walk_atomic(responses[ri], evaluate_match):
+                break
 
 
 def check_header(
@@ -159,12 +165,14 @@ def check_header(
         ):
             continue
 
-        for ri in range(first, req_idx):
+        print(header_name_lower)
+
+        for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
                 continue
 
-            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> None:
+            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> bool:
                 if V.evaluate_header_atomic_dep(
                     atomic,
                     header.name,
@@ -178,8 +186,11 @@ def check_header(
                     graph.edges.append(
                         make_edge("header", source_node, to_node, atomic, ri, req_idx, header_name=header.name)
                     )
+                    return True
+                return False
 
-            _walk_atomic(responses[ri], evaluate_match)
+            if _walk_atomic(responses[ri], evaluate_match):
+                break
 
 
 def check_query(
@@ -191,12 +202,12 @@ def check_query(
 ) -> None:
     """Detect correlations inside URL query parameters."""
     for qparam in to_node.request.queryParams:
-        for ri in range(first, req_idx):
+        for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
                 continue
 
-            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> None:
+            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> bool:
                 if V.general_atomic_comparison(
                     atomic,
                     qparam.value,
@@ -211,8 +222,11 @@ def check_query(
                     graph.edges.append(
                         make_edge("queryparam", source_node, to_node, atomic, ri, req_idx, query_param_name=qparam.name)
                     )
+                    return True
+                return False
 
-            _walk_atomic(responses[ri], evaluate_match)
+            if _walk_atomic(responses[ri], evaluate_match):
+                break
 
 
 def check_cookie(
@@ -244,12 +258,12 @@ def check_cookie(
                 combined_cookies.append(Cookie(name=name, value=val))
 
     for cookie in combined_cookies:
-        for ri in range(first, req_idx):
+        for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
                 continue
 
-            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> None:
+            def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> bool:
                 if V.evaluate_cookie_atomic_dep(
                     atomic,
                     cookie.name,
@@ -263,8 +277,11 @@ def check_cookie(
                     graph.edges.append(
                         make_edge("cookie", source_node, to_node, atomic, ri, req_idx, name=cookie.name)
                     )
+                    return True
+                return False
 
-            _walk_atomic(responses[ri], evaluate_match)
+            if _walk_atomic(responses[ri], evaluate_match):
+                break
 
 
 def _schema_match(request_obj_str: str, resp_node: Any) -> StructuredObject | None:
@@ -295,12 +312,12 @@ def check_body(
 
     if post_data.mimeType == "application/x-www-form-urlencoded":
         for param in post_data.params:
-            for ri in range(first, req_idx):
+            for ri in range(req_idx - 1, first - 1, -1):
                 source_node = graph.get_node_by_index(ri)
                 if source_node is None:
                     continue
 
-                def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> None:
+                def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> bool:
                     if V.general_atomic_comparison(
                         atomic,
                         param.value,
@@ -315,8 +332,11 @@ def check_body(
                         graph.edges.append(
                             make_edge("bodyue", source_node, to_node, atomic, ri, req_idx, name=param.name)
                         )
+                        return True
+                    return False
 
-                _walk_atomic(responses[ri], evaluate_match)
+                if _walk_atomic(responses[ri], evaluate_match):
+                    break
 
     elif post_data.mimeType == "application/json":
         text = (post_data.text or "").strip()
@@ -372,9 +392,8 @@ def _search_schema(
     name: str | None,
     first: int,
 ) -> bool:
-    """Search previous responses for whole-object schema matches."""
-    hit = False
-    for ri in range(first, req_idx):
+    """Search previous responses for whole-object schema matches, prioritizing most recent."""
+    for ri in range(req_idx - 1, first - 1, -1):
         source_node = graph.get_node_by_index(ri)
         if source_node is None:
             continue
@@ -394,8 +413,8 @@ def _search_schema(
             if matched_structured.name == "All":
                 edge.name = "All"
             graph.edges.append(edge)
-            hit = True
-    return hit
+            return True
+    return False
 
 
 def _check_primitive(
@@ -407,13 +426,13 @@ def _check_primitive(
     to_node: MyNode,
     first: int,
 ) -> None:
-    """Check primitive atomic field match across previous responses."""
-    for ri in range(first, req_idx):
+    """Check primitive atomic field match across previous responses, stopping at most recent match."""
+    for ri in range(req_idx - 1, first - 1, -1):
         source_node = graph.get_node_by_index(ri)
         if source_node is None:
             continue
 
-        def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> None:
+        def evaluate_match(atomic: AtomicObject, parent: StructuredObject | None) -> bool:
             if V.general_atomic_comparison(
                 atomic,
                 value,
@@ -428,5 +447,8 @@ def _check_primitive(
                 graph.edges.append(
                     make_edge("bodyjson", source_node, to_node, atomic, ri, req_idx, name=name, primitive=True)
                 )
+                return True
+            return False
 
-        _walk_atomic(responses[ri], evaluate_match)
+        if _walk_atomic(responses[ri], evaluate_match):
+            break
