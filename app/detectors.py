@@ -14,13 +14,73 @@ from .har_model import Cookie
 from .response_model import AtomicObject, ResponseUnstructured, StructuredObject
 
 BLACKLIST_HEADERS = {
-    "sec-ch-ua",
-    "sec-ch-ua-platform",
-    "Accept-Language",
-    "User-Agent",
-    "sec-ch-ua-mobile",
+    # Browser identification
+    "user-agent",
+    "accept-language",
+
+    # Network / HTTP infrastructure
+    "accept-encoding",
+    "connection",
+    "keep-alive",
+    "host",
+    "content-length",
+    "transfer-encoding",
+    "te",
+    "trailer",
+
+    # Browser caching
+    "cache-control",
+    "pragma",
+
+    # Monitoring and distributed tracing
     "baggage",
     "sentry-trace",
+    "traceparent",
+    "tracestate",
+
+    # Request tracking
+    "x-request-id",
+    "x-correlation-id",
+
+    # Infrastructure
+    "via",
+    "x-real-ip",
+
+    # Browser security and metadata
+    "upgrade-insecure-requests",
+    "dnt",
+    "sec-gpc",
+
+    # Browser optimization
+    "x-web-optimize-response",
+
+    "x-site",
+    "x-source",
+    "referer",
+    "priority",
+    ":path",
+    ":scheme",
+    ":method",
+    "accept",
+    "content-type",
+    "x-web-client",
+    "x-web-client-id",
+    ":authority",
+    "origin",
+    "x-client",
+    "x-creation-tags",
+    "x-client-info"
+}
+
+BLACKLIST_HEADER_PREFIXES = {
+    # Browser client hints
+    "sec-ch-",
+
+    # Browser fetch metadata
+    "sec-fetch-",
+
+    # Infrastructure / reverse proxy
+    "x-forwarded-",
 }
 
 
@@ -88,7 +148,15 @@ def check_header(
     """Detect correlations inside HTTP request headers."""
     for header in to_node.request.headers:
         header_name_lower = (header.name or "").lower()
-        if header.name in BLACKLIST_HEADERS or header_name_lower in ("cookie", "set-cookie"):
+        if (
+            header_name_lower in BLACKLIST_HEADERS
+            or header_name_lower == "cookie"
+            or header_name_lower == "set-cookie"
+            or any(
+                header_name_lower.startswith(prefix)
+                for prefix in BLACKLIST_HEADER_PREFIXES
+            )
+        ):
             continue
 
         for ri in range(first, req_idx):
