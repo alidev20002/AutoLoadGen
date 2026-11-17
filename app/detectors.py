@@ -153,6 +153,9 @@ def check_header(
 ) -> None:
     """Detect correlations inside HTTP request headers."""
     for header in to_node.request.headers:
+        if not header.value:
+            continue
+
         header_name_lower = (header.name or "").lower()
         if (
             header_name_lower in BLACKLIST_HEADERS
@@ -202,6 +205,9 @@ def check_query(
 ) -> None:
     """Detect correlations inside URL query parameters."""
     for qparam in to_node.request.queryParams:
+        if not qparam.value:
+            continue
+
         for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
@@ -258,6 +264,9 @@ def check_cookie(
                 combined_cookies.append(Cookie(name=name, value=val))
 
     for cookie in combined_cookies:
+        if not cookie.value:
+            continue
+
         for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
@@ -285,14 +294,14 @@ def check_cookie(
 
 
 def _schema_match(request_obj_str: str, resp_node: Any) -> StructuredObject | None:
-    """Find a StructuredObject in response node whose JSON schema matches request schema."""
+    """Find a non-empty StructuredObject in response node whose JSON schema matches request schema."""
     target_schema = schema_client.generate_json_schema(request_obj_str)
     stack = [resp_node]
     while stack:
         current = stack.pop()
         for child in _get_node_children(current):
             if isinstance(child, StructuredObject):
-                if child.schema_string == target_schema:
+                if child.schema_string == target_schema and child.objects and child.value not in ("{}", "[]", ""):
                     return child
                 stack.append(child)
     return None
@@ -312,6 +321,9 @@ def check_body(
 
     if post_data.mimeType == "application/x-www-form-urlencoded":
         for param in post_data.params:
+            if not param.value:
+                continue
+
             for ri in range(req_idx - 1, first - 1, -1):
                 source_node = graph.get_node_by_index(ri)
                 if source_node is None:
@@ -360,6 +372,8 @@ def _check_json_value(
 ) -> None:
     """Recursively search for matching JSON structures or primitives within JSON payload."""
     if isinstance(obj, dict):
+        if not obj:
+            return
         serialized = json.dumps(obj, separators=(",", ":"))
         if _search_schema(responses, serialized, req_idx, graph, to_node, name, first):
             return
@@ -370,6 +384,8 @@ def _check_json_value(
                 _check_primitive(responses, str(v), k, req_idx, graph, to_node, first)
 
     elif isinstance(obj, list):
+        if not obj:
+            return
         serialized = json.dumps(obj, separators=(",", ":"))
         if _search_schema(responses, serialized, req_idx, graph, to_node, name, first):
             return
@@ -427,6 +443,9 @@ def _check_primitive(
     first: int,
 ) -> None:
     """Check primitive atomic field match across previous responses, stopping at most recent match."""
+    if not value:
+        return
+
     for ri in range(req_idx - 1, first - 1, -1):
         source_node = graph.get_node_by_index(ri)
         if source_node is None:
