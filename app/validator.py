@@ -138,7 +138,7 @@ def general_atomic_comparison(
     consumer_method: str = "",
 ) -> bool:
     """Evaluate whether candidate producer and consumer fields constitute a valid dependency."""
-    if atomic.value != to_value or to_name is None:
+    if not to_value or not atomic.value or atomic.value != to_value or to_name is None:
         return False
 
     if _LLM_ENABLED:
@@ -224,6 +224,9 @@ def evaluate_header_atomic_dep(
     consumer_method: str = "",
 ) -> bool:
     """Evaluate dependency in HTTP request header."""
+    if not header_value or not atomic.value:
+        return False
+    
     if header_name == "Authorization" and header_value.startswith("Bearer "):
         return atomic.value == header_value[7:]
     return general_atomic_comparison(
@@ -244,6 +247,9 @@ def evaluate_cookie_atomic_dep(
     consumer_method: str = "",
 ) -> bool:
     """Evaluate dependency in HTTP cookie."""
+    if not cookie_value or not atomic.value:
+        return False
+    
     if "Authorization" in cookie_name:
         return atomic.value == cookie_value
     return general_atomic_comparison(
@@ -263,6 +269,9 @@ def evaluate_url_atomic_dep(
     consumer_method: str = "",
 ) -> bool:
     """Evaluate dependency in URL path segment."""
+    if not atomic.value:
+        return False
+    
     if _LLM_ENABLED:
         return _llm_name_match(
             atomic, father, possible_name, from_url,
