@@ -18,18 +18,6 @@ logger = logging.getLogger(__name__)
 SIMILARITY_THRESHOLD = 0.6
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
-
-COMMON_API_BASES = (
-    "https://api.spotify.com/v1",
-    "https://www.googleapis.com/drive/v3",
-    "https://www.gitlab.com/api/v4",
-    "https://example.com/api",
-    "http://localhost:8080",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:8080",
-)
-
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
 BASE_DIR = Path(__file__).resolve().parent
 MODEL_DIR = BASE_DIR / "models" / "all-MiniLM-L6-v2"
@@ -71,54 +59,67 @@ def _load_all_minilm_model():
         local_files_only=True,
     )
 
+_HTTP_METHOD_RE = re.compile(
+    r"^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+",
+    flags=re.IGNORECASE,
+)
+_BOILERPLATE_SEGMENTS = {"api", "rest", "graphql"}
+_VERSION_SEGMENT_RE = re.compile(r"^v\d+(?:\.\d+)*$", flags=re.IGNORECASE)
+_NUMERIC_ID_RE = re.compile(r"^\d+$")
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    flags=re.IGNORECASE,
+)
+_HEX_HASH_RE = re.compile(r"^[0-9a-f]{16,}$", flags=re.IGNORECASE)
 
-def _normalize_text(text: str) -> str:
-    """Convert camelCase and snake_case tokens into lowercase space-separated words."""
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
-    text = re.sub(r"([A-Z])([A-Z][a-z])", r"\1 \2", text)
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", " ", text)
-    return " ".join(text.split())
+def _normalize_field(field_name: str) -> str:
+    """Strip synthetic root wrappers and normalize field name."""
+    cleaned = field_name.strip()
+    cleaned = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", cleaned)
+    cleaned = re.sub(r"([A-Z])([A-Z][a-z])", r"\1 \2", cleaned)
+    cleaned = cleaned.lower()
+    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+    return " ".join(cleaned.split())
+
+
+def _is_garbage_segment(segment: str, field_value: str | None = None) -> bool:
+    """Return True if a URL path segment is a dynamic value, ID, or API boilerplate."""
+    if field_value and segment == field_value:
+        return True
+    lower = segment.lower()
+    if lower in _BOILERPLATE_SEGMENTS or _VERSION_SEGMENT_RE.match(lower):
+        return True
+    if _NUMERIC_ID_RE.match(segment) or _UUID_RE.match(segment) or _HEX_HASH_RE.match(segment):
+        return True
+    return False
 
 
 def _normalize_endpoint(endpoint: str, field_value: str | None = None) -> str:
-    """Strip HTTP method, host prefix, query parameters and all garbage parts from endpoint URL."""
-    cleaned = endpoint.strip()
-    cleaned = re.sub(
-        r"^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-
-    for base in COMMON_API_BASES:
-        normalized_base = base.rstrip("/")
-        if cleaned.lower().startswith(normalized_base.lower()):
-            cleaned = cleaned[len(normalized_base):]
-            break
+    """Extract meaningful resource words from an endpoint URL independent of base URL."""
+    cleaned = _HTTP_METHOD_RE.sub("", endpoint.strip())
 
     if "://" in cleaned:
         cleaned = urlsplit(cleaned).path
 
     cleaned = cleaned.split("?", 1)[0].split("#", 1)[0]
+    target_val = str(field_value).strip() if field_value else None
 
-    # Keep only the last non-empty path segment.
-    parts = [part for part in cleaned.split("/") if part]
-    cleaned = parts[-1] if parts else ""
+    meaningful_parts = [
+        part for part in cleaned.split("/")
+        if part and not _is_garbage_segment(part, target_val)
+    ]
 
-    # Remove field_value if it exactly matches the endpoint segment.
-    if field_value:
-        field_value = str(field_value).strip()
-        if cleaned == field_value:
-            cleaned = parts[-2] if len(parts) > 1 else ""
-
-    return _normalize_text(cleaned)
+    # Keep up to the last two meaningful resource segments for concise context.
+    selected = meaningful_parts[-1:] if meaningful_parts else []
+    return _normalize_field(" ".join(selected))
 
 
 def _format_field_context(endpoint: str, field_name: str, field_value: str | None = None) -> str:
-    """Format endpoint path and field name into textual prompt for embedding."""
-    return f"API endpoint: {_normalize_endpoint(endpoint, field_value)}. Field name: {_normalize_text(field_name)}."
-
+    """Format cleaned endpoint path and field name into textual prompt for embedding."""
+    return (
+        f"API endpoint: {_normalize_endpoint(endpoint, field_value)}. "
+        f"Field name: {_normalize_field(field_name)}."
+    )
 
 def field_match_embedding(
     producer_endpoint: str,
@@ -131,8 +132,8 @@ def field_match_embedding(
 ) -> tuple[bool | None, float]:
     """Compute semantic similarity score between producer and consumer fields."""
 
-    norm_producer = _normalize_text(producer_field)
-    norm_consumer = _normalize_text(consumer_field)
+    norm_producer = _normalize_field(producer_field)
+    norm_consumer = _normalize_field(consumer_field)
 
     if not norm_producer or not norm_consumer:
         return False, 0.0
@@ -140,7 +141,7 @@ def field_match_embedding(
     try:
         model = _load_all_minilm_model()
         texts = [
-            _format_field_context(producer_endpoint, producer_field),
+            _format_field_context(producer_endpoint, producer_field, producer_value),
             _format_field_context(consumer_endpoint, consumer_field, consumer_value),
         ]
 
