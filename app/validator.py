@@ -8,6 +8,7 @@ from urllib.parse import urlparse
 
 from . import config
 from . import embedding_matcher as _EMBEDDING
+from . import lcs_embedding_matcher as _LCS_EMBEDDING
 from . import llm_matcher as _LLM
 from .lcs_matcher import lc_substr_norm
 from .response_model import AtomicObject, StructuredObject
@@ -18,6 +19,7 @@ LCS_THRESHOLD = 0.44
 
 _LLM_ENABLED = False
 _EMBEDDING_ENABLED = False
+_LCS_EMBEDDING_ENABLED = False
 
 
 def enable_llm() -> None:
@@ -42,6 +44,18 @@ def disable_embedding() -> None:
     """Disable embedding-based matching."""
     global _EMBEDDING_ENABLED
     _EMBEDDING_ENABLED = False
+
+
+def enable_lcs_embedding() -> None:
+    """Enable hybrid LCS-Embedding field name matching."""
+    global _LCS_EMBEDDING_ENABLED
+    _LCS_EMBEDDING_ENABLED = True
+
+
+def disable_lcs_embedding() -> None:
+    """Disable hybrid LCS-Embedding field name matching."""
+    global _LCS_EMBEDDING_ENABLED
+    _LCS_EMBEDDING_ENABLED = False
 
 
 def llm_enabled() -> bool:
@@ -148,6 +162,13 @@ def general_atomic_comparison(
             lcs_fallback=lambda: _name_match(to_name, atomic.name, father, from_url),
         )
 
+    if _LCS_EMBEDDING_ENABLED:
+        return _lcs_embedding_name_match(
+            atomic, father, to_name, from_url, consumer_url,
+            to_value, location, producer_method, consumer_method,
+            lcs_check=lambda: _name_match(to_name, atomic.name, father, from_url),
+        )
+
     if _EMBEDDING_ENABLED:
         return _embedding_name_match(
             atomic, father, to_name, from_url, consumer_url,
@@ -211,6 +232,30 @@ def _embedding_name_match(
     if config.fallback_to_lcs and lcs_fallback is not None:
         return lcs_fallback()
     return False
+
+
+def _lcs_embedding_name_match(
+    atomic: AtomicObject,
+    father: StructuredObject | None,
+    to_name: str,
+    from_url: str,
+    consumer_url: str,
+    value: str,
+    location: str,
+    producer_method: str = "",
+    consumer_method: str = "",
+    lcs_check: Callable[[], bool] | None = None,
+) -> bool:
+    res, _ = _LCS_EMBEDDING.field_match_lcs_embedding(
+        producer_endpoint=f"{producer_method} {from_url}".strip(),
+        producer_field=_qualified_producer_name(atomic, father),
+        producer_value=atomic.value,
+        consumer_endpoint=f"{consumer_method} {consumer_url}".strip(),
+        consumer_field=to_name,
+        consumer_value=value,
+        lcs_match_fn=lcs_check or (lambda: False),
+    )
+    return bool(res) if res is not None else False
 
 
 def evaluate_header_atomic_dep(
@@ -278,6 +323,13 @@ def evaluate_url_atomic_dep(
             consumer_url, atomic.value, "url",
             producer_method, consumer_method,
             lcs_fallback=lambda: _lcs_url(atomic, from_url, father, possible_name),
+        )
+    if _LCS_EMBEDDING_ENABLED:
+        return _lcs_embedding_name_match(
+            atomic, father, possible_name, from_url,
+            consumer_url, atomic.value, "url",
+            producer_method, consumer_method,
+            lcs_check=lambda: _lcs_url(atomic, from_url, father, possible_name),
         )
     if _EMBEDDING_ENABLED:
         return _embedding_name_match(

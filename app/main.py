@@ -215,6 +215,7 @@ async def graphs_build(
     har: UploadFile = File(...),
     use_llm: bool = Form(False),
     use_embedding: bool = Form(False),
+    use_lcs_embedding: bool = Form(False),
 ) -> dict[str, Any]:
     """Build a correlation dependency graph from an uploaded HAR file."""
     data = await har.read()
@@ -224,9 +225,10 @@ async def graphs_build(
         entries=entries,
         use_llm=use_llm,
         use_embedding=use_embedding,
+        use_lcs_embedding=use_lcs_embedding,
     )
 
-    mode = "LLM" if use_llm else ("EMBEDDING" if use_embedding else "LCS")
+    mode = "LLM" if use_llm else ("LCS-EMBEDDING" if use_lcs_embedding else ("EMBEDDING" if use_embedding else "LCS"))
     result = _format_graph_payload(graph)
     result["mode"] = mode
     return result
@@ -316,6 +318,7 @@ async def jmx_build(
     auto_graph: bool = Form(False),
     use_llm: bool = Form(False),
     use_embedding: bool = Form(False),
+    use_lcs_embedding: bool = Form(False),
     workload: list[str] = Form(default=[]),
 ) -> Response:
     """Generate correlated JMeter .jmx test plan from HAR file and dependency graph."""
@@ -342,6 +345,7 @@ async def jmx_build(
             entries=entries,
             use_llm=use_llm,
             use_embedding=use_embedding,
+            use_lcs_embedding=use_lcs_embedding,
         )
     else:
         raise HTTPException(status_code=422, detail="A graph file or auto_graph=true is required")

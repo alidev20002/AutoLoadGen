@@ -35,6 +35,7 @@ def build_graph(
     responses: list[ResponseUnstructured] | None = None,
     use_llm: bool = False,
     use_embedding: bool = False,
+    use_lcs_embedding: bool = False,
 ) -> tuple[DependencyGraph, list[Entry], list[ResponseUnstructured]]:
     """Construct dependency graph by evaluating producer-consumer relationships across HAR requests."""
     resolved_entries = entries if entries is not None else load_har(har_path)
@@ -49,6 +50,9 @@ def build_graph(
 
     if use_embedding:
         V.enable_embedding()
+
+    if use_lcs_embedding:
+        V.enable_lcs_embedding()
 
     try:
         graph.add_request(resolved_entries[0].request, 0)
@@ -72,5 +76,7 @@ def build_graph(
             V.disable_llm()
         if use_embedding:
             V.disable_embedding()
+        if use_lcs_embedding:
+            V.disable_lcs_embedding()
 
     return graph, resolved_entries, resolved_responses
