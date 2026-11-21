@@ -43,74 +43,76 @@ except ImportError:
     SentenceTransformer = None  # type: ignore[assignment,misc]
     _HAS_SENTENCE_TRANSFORMERS = False
 
-COMMON_API_BASES = (
-    "https://api.spotify.com/v1",
-    "https://www.googleapis.com/drive/v3",
-    "https://www.gitlab.com/api/v4",
-    "https://example.com/api",
-    "http://localhost:8080",
-    "http://localhost:8000",
-    "http://127.0.0.1:8000",
-    "http://127.0.0.1:8080",
-)
-
 
 @lru_cache(maxsize=4)
 def _load_model(model_name: str) -> Any:
     """Load and cache SentenceTransformer model on CPU."""
     if not _HAS_SENTENCE_TRANSFORMERS or SentenceTransformer is None:
         raise ImportError("sentence-transformers package is required for embedding matching.")
-    return SentenceTransformer(model_name, device="cpu")
+    return SentenceTransformer(model_name, device="cpu", local_files_only=True)
+
+_HTTP_METHOD_RE = re.compile(
+    r"^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+",
+    flags=re.IGNORECASE,
+)
+_BOILERPLATE_SEGMENTS = {"api", "rest", "graphql"}
+_VERSION_SEGMENT_RE = re.compile(r"^v\d+(?:\.\d+)*$", flags=re.IGNORECASE)
+_NUMERIC_ID_RE = re.compile(r"^\d+$")
+_UUID_RE = re.compile(
+    r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$",
+    flags=re.IGNORECASE,
+)
+_HEX_HASH_RE = re.compile(r"^[0-9a-f]{16,}$", flags=re.IGNORECASE)
 
 
-def _normalize_text(text: str) -> str:
-    """Convert camelCase and snake_case tokens into lowercase space-separated words."""
-    text = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", text)
-    text = re.sub(r"([A-Z])([A-Z][a-z])", r"\1 \2", text)
-    text = text.lower()
-    text = re.sub(r"[^a-z0-9]+", " ", text)
-    return " ".join(text.split())
+def _normalize_field(field_name: str) -> str:
+    """Strip synthetic root wrappers and normalize field name."""
+    cleaned = field_name.strip()
+    cleaned = re.sub(r"([a-z0-9])([A-Z])", r"\1 \2", cleaned)
+    cleaned = re.sub(r"([A-Z])([A-Z][a-z])", r"\1 \2", cleaned)
+    cleaned = cleaned.lower()
+    cleaned = re.sub(r"[^a-z0-9]+", " ", cleaned)
+    return " ".join(cleaned.split())
+
+
+def _is_garbage_segment(segment: str, field_value: str | None = None) -> bool:
+    """Return True if a URL path segment is a dynamic value, ID, or API boilerplate."""
+    if field_value and segment == field_value:
+        return True
+    lower = segment.lower()
+    if lower in _BOILERPLATE_SEGMENTS or _VERSION_SEGMENT_RE.match(lower):
+        return True
+    if _NUMERIC_ID_RE.match(segment) or _UUID_RE.match(segment) or _HEX_HASH_RE.match(segment):
+        return True
+    return False
 
 
 def _normalize_endpoint(endpoint: str, field_value: str | None = None) -> str:
-    """Extract the last path segment and remove field_value if present."""
-    cleaned = endpoint.strip()
-
-    cleaned = re.sub(
-        r"^\s*(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\s+",
-        "",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-
-    for base in COMMON_API_BASES:
-        normalized_base = base.rstrip("/")
-        if cleaned.lower().startswith(normalized_base.lower()):
-            cleaned = cleaned[len(normalized_base):]
-            break
+    """Extract meaningful resource words from an endpoint URL independent of base URL."""
+    cleaned = _HTTP_METHOD_RE.sub("", endpoint.strip())
 
     if "://" in cleaned:
         cleaned = urlsplit(cleaned).path
 
     cleaned = cleaned.split("?", 1)[0].split("#", 1)[0]
+    target_val = str(field_value).strip() if field_value else None
 
-    # Keep only the last non-empty path segment.
-    parts = [part for part in cleaned.split("/") if part]
-    cleaned = parts[-1] if parts else ""
+    meaningful_parts = [
+        part for part in cleaned.split("/")
+        if part and not _is_garbage_segment(part, target_val)
+    ]
 
-    # Remove field_value if it exactly matches the endpoint segment.
-    if field_value:
-        field_value = str(field_value).strip()
-        if cleaned == field_value:
-            cleaned = parts[-2] if len(parts) > 1 else ""
-
-    return _normalize_text(cleaned)
+    # Keep up to the last two meaningful resource segments for concise context.
+    selected = meaningful_parts[-2:] if meaningful_parts else []
+    return _normalize_field(" ".join(selected))
 
 
 def _format_field_context(endpoint: str, field_name: str, field_value: str | None = None) -> str:
-    """Format endpoint path and field name into textual prompt for embedding."""
-    return f"API endpoint: {_normalize_endpoint(endpoint, field_value)}. Field name: {_normalize_text(field_name)}."
-
+    """Format cleaned endpoint path and field name into textual prompt for embedding."""
+    return (
+        f"API endpoint: {_normalize_endpoint(endpoint, field_value)}. "
+        f"Field name: {_normalize_field(field_name)}."
+    )
 
 def _qualified_producer_name(field_name: str, father_name: str | None = None, xpath: str | None = None) -> str:
     """Construct full hierarchical field identifier for semantic matching."""
@@ -133,14 +135,14 @@ def field_match_embedding(
     encoder_fn: Callable[[list[str]], np.ndarray] | None = None,
 ) -> tuple[bool, float]:
     """Compute semantic similarity score between producer and consumer fields."""
-    norm_producer = _normalize_text(producer_field)
-    norm_consumer = _normalize_text(consumer_field)
+    norm_producer = _normalize_field(producer_field)
+    norm_consumer = _normalize_field(consumer_field)
 
     if not norm_producer or not norm_consumer:
         return False, 0.0
 
     texts = [
-        _format_field_context(producer_endpoint, producer_field),
+        _format_field_context(producer_endpoint, producer_field, producer_value),
         _format_field_context(consumer_endpoint, consumer_field, consumer_value),
     ]
 
@@ -149,7 +151,7 @@ def field_match_embedding(
             embeddings = encoder_fn(texts)
         elif _HAS_SENTENCE_TRANSFORMERS and SentenceTransformer is not None:
             model = _load_model(model_name)
-            # print(f"\n\n{texts[0]}\n{texts[1]}")
+            print(f"\n\n{texts[0]}\n{texts[1]}")
             embeddings = model.encode(
                 texts,
                 normalize_embeddings=True,
@@ -161,7 +163,7 @@ def field_match_embedding(
             return False, 0.0
 
         context_score = float(np.dot(embeddings[0], embeddings[1]))
-        # print(f"Similarity: {context_score}")
+        print(f"Similarity: {context_score}")
         is_match = context_score >= similarity_threshold
         return is_match, context_score
     except Exception as exc:
