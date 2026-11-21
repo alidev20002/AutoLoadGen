@@ -9,7 +9,7 @@ from urllib.parse import urlparse
 from . import config
 from . import embedding_matcher as _EMBEDDING
 from . import llm_matcher as _LLM
-from .lcs import lc_substr_norm
+from .lcs_matcher import lc_substr_norm
 from .response_model import AtomicObject, StructuredObject
 
 logger = logging.getLogger(__name__)
