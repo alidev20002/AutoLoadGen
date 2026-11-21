@@ -1,8 +1,8 @@
 /* AutoLoadGen GUI — covers all backend APIs */
 const $ = (s) => document.querySelector(s);
 const state = {
-  harFile: null, graph: null, mode: "LCS",
-  useLlm: false, useEmbedding: false, matchMode: "lcs", selected: null, // {kind:'node'|'edge', id}
+  harFile: null, graph: null, mode: "LCS-EMBEDDING",
+  useLlm: false, useEmbedding: false, useLcsEmbedding: true, matchMode: "lcs_embedding", selected: null, // {kind:'node'|'edge', id}
   hovered: null, // {kind:'node'|'edge', id}
   hiddenTypes: new Set(), nodeFilter: "", showLabels: true,
   jmxBlob: null, jmxText: "",
@@ -150,25 +150,38 @@ $("#clearHarBtn").onclick = (e) => {
   $("#harMeta").textContent = "No file selected";
   $("#clearHarBtn").hidden = true;
 };
-/* ---------- matcher mode: exactly one of LCS / Embedding / LLM ---------- */
-const MATCH_MODE_LABELS = { lcs: "LCS", embedding: "EMBEDDING", llm: "LLM" };
+/* ---------- matcher mode: exactly one of Hybrid (LCS+Embedding) / LCS / Embedding / LLM ---------- */
+const MATCH_MODE_LABELS = {
+  lcs_embedding: "LCS-EMBEDDING",
+  lcs: "LCS",
+  embedding: "EMBEDDING",
+  llm: "LLM",
+};
 function setMatchMode(mode, announce = false) {
-  if (!MATCH_MODE_LABELS[mode]) mode = "lcs";
+  if (!MATCH_MODE_LABELS[mode]) mode = "lcs_embedding";
   state.matchMode = mode;
   state.useLlm = mode === "llm";
   state.useEmbedding = mode === "embedding";
+  state.useLcsEmbedding = mode === "lcs_embedding";
   document.querySelectorAll('input[name="matchMode"]').forEach((r) => {
     const on = r.value === mode;
     r.checked = on;
     r.closest(".match-opt")?.classList.toggle("on", on);
   });
   $("#modePill").textContent = "Mode: " + MATCH_MODE_LABELS[mode];
-  if (announce) setStatus($("#buildStatus"), `${MATCH_MODE_LABELS[mode]} matcher selected${mode === "lcs" ? " — fastest, no model calls." : "."}`, null);
+  if (announce) {
+    const note = mode === "lcs_embedding"
+      ? " — recommended hybrid (LCS + Embedding)."
+      : mode === "lcs"
+      ? " — fastest, no model calls."
+      : ".";
+    setStatus($("#buildStatus"), `${MATCH_MODE_LABELS[mode]} matcher selected${note}`, null);
+  }
 }
 document.querySelectorAll('input[name="matchMode"]').forEach((r) => {
   r.onchange = () => setMatchMode(r.value, true);
 });
-setMatchMode("lcs");
+setMatchMode("lcs_embedding");
 
 /* ---------- build graph ---------- */
 function setStatus(el, msg, ok) {
@@ -256,11 +269,13 @@ $("#buildGraphBtn").onclick = async () => {
   fd.append("har", state.harFile);
   fd.append("use_llm", state.useLlm ? "true" : "false");
   fd.append("use_embedding", state.useEmbedding ? "true" : "false");
+  fd.append("use_lcs_embedding", state.useLcsEmbedding ? "true" : "false");
+  fd.append("use_lcs_embedding", state.useLcsEmbedding ? "true" : "false");
   try {
     const r = await fetch("/graphs/build", { method: "POST", body: fd });
     if (!r.ok) throw new Error(await r.text());
     const j = await r.json();
-    state.graph = j.graph; state.mode = j.mode || (state.useLlm ? "LLM" : "LCS");
+    state.graph = j.graph; state.mode = j.mode || MATCH_MODE_LABELS[state.matchMode] || "LCS-EMBEDDING";
     $("#modePill").textContent = "Mode: " + state.mode;
     state.pos = {}; state.selected = null; state._fitOnce = false; state._userMoved = {};
     setStatus($("#buildStatus"), `✓ ${j.nodes} nodes · ${j.edges} edges (mode=${state.mode}) — open Step 2`, true);
@@ -1751,7 +1766,7 @@ function updateConfirmSummary() {
   const elx = $("#confirmSummary");
   if (!state.graph) { elx.textContent = "No graph confirmed yet — go back to Step 2."; return; }
   elx.innerHTML = `Confirmed <b>${state.graph.nodes.length} endpoints</b> · <b>${state.graph.edges.length} dependencies</b> (mode=${state.mode})<br/>
-    HAR: <b>${state.harFile ? state.harFile.name : "— (needed for JMX!)"}</b> · workload rows: <b>${workloadSpecs().length}</b> · LLM: <b>${state.useLlm}</b>`;
+    HAR: <b>${state.harFile ? state.harFile.name : "— (needed for JMX!)"}</b> · workload rows: <b>${workloadSpecs().length}</b> · Matcher: <b>${MATCH_MODE_LABELS[state.matchMode] || state.mode}</b>`;
 }
 $("#buildJmxBtn").onclick = () => buildJmx(false);
 async function buildJmx(auto = false) {

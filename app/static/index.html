@@ -37,7 +37,7 @@
   <section id="panel-1" class="panel glass active">
     <div class="grid2">
       <div class="card">
-        <div class="s1-head"><h2>HAR file</h2><span class="pill" id="modePill">Mode: LCS</span></div>
+        <div class="s1-head"><h2>HAR file</h2><span class="pill" id="modePill">Mode: LCS-EMBEDDING</span></div>
         <label class="dropzone dz-large" id="dropzone" data-tip="Recorded HTTP traffic. Sent to the build APIs — nothing is stored on the server.">
           <input type="file" id="harFile" accept=".har,.json,application/json" hidden />
           <div class="dz-icon"><svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M16 16l-4-4-4 4"/><path d="M12 12v9"/><path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/></svg></div>
@@ -50,19 +50,33 @@
             <button class="btn ghost sm" id="clearHarBtn" hidden data-tip="Remove the selected file">✕</button>
           </div>
           <div class="match-modes" role="radiogroup" aria-label="Dependency matching method">
-            <label class="match-opt on">
-              <input type="radio" name="matchMode" value="lcs" checked />
-              <span class="mo-title">LCS</span>
-              <span class="mo-sub">Text similarity · default, no model calls</span>
+            <label class="match-opt on has-badge">
+              <input type="radio" name="matchMode" value="lcs_embedding" checked />
+              <span class="mo-head">
+                <span class="mo-title">Hybrid <span class="mo-tag">(LCS + Embedding)</span></span>
+                <span class="mo-badge">Recommended</span>
+              </span>
+              <span class="mo-sub">Combines text &amp; semantic matching · default, balanced speed &amp; accuracy</span>
+            </label>
+            <label class="match-opt">
+              <input type="radio" name="matchMode" value="lcs" />
+              <span class="mo-head">
+                <span class="mo-title">LCS</span>
+              </span>
+              <span class="mo-sub">Text similarity · fastest, no model calls</span>
             </label>
             <label class="match-opt">
               <input type="radio" name="matchMode" value="embedding" />
-              <span class="mo-title">Embedding</span>
+              <span class="mo-head">
+                <span class="mo-title">Embedding</span>
+              </span>
               <span class="mo-sub">Semantic similarity · slower, needs an embedding model</span>
             </label>
             <label class="match-opt">
               <input type="radio" name="matchMode" value="llm" />
-              <span class="mo-title">LLM</span>
+              <span class="mo-head">
+                <span class="mo-title">LLM</span>
+              </span>
               <span class="mo-sub">Model judges each match · slowest, most accurate</span>
             </label>
           </div>
