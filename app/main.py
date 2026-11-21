@@ -45,7 +45,11 @@ def index():
     """Serve the single-page frontend application."""
     index_file = STATIC_DIR / "index.html"
     if index_file.is_file():
-        return FileResponse(str(index_file), media_type="text/html")
+        return FileResponse(
+            str(index_file),
+            media_type="text/html",
+            headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
+        )
     return {"message": "Frontend static assets not found. Visit /docs for API documentation."}
 
 
