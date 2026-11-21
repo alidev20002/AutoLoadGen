@@ -24,7 +24,7 @@ for p in _SEARCH_PATHS:
         sys.path.insert(0, str(p))
 
 try:
-    from app.lcs import lc_substr_norm
+    from app.lcs_matcher import lc_substr_norm
 except ImportError:
     def lc_substr_norm(a: str, b: str) -> float:
         """Calculate normalized longest common substring similarity in [0.0, 1.0]."""

@@ -1,6 +1,6 @@
 """Benchmark Runner for API Field Dependency Detection Approaches.
 
-Evaluates and compares LCS, Embedding, and LLM matching approaches on a
+Evaluates and compares LCS, Embedding, LCS-Embedding, and LLM matching approaches on a
 benchmark dataset of testcases, computing Precision, Recall, F1-Score,
 Accuracy, Specificity, TP, FP, TN, FN, latency, and per-pattern metrics.
 """
@@ -28,6 +28,7 @@ for p in _SEARCH_PATHS:
         sys.path.insert(0, str(p))
 
 import Embedding_matcher_approach
+import LCS_Embedding_matcher_approach
 import LCS_matcher_approach
 import LLM_matcher_approach
 
@@ -154,6 +155,7 @@ class BenchmarkRunner:
         self._matchers: dict[str, Any] = {
             "LCS": LCS_matcher_approach.LCSMatcher(),
             "Embedding": Embedding_matcher_approach.EmbeddingMatcher(),
+            "LCS-Embedding": LCS_Embedding_matcher_approach.LCSEmbeddingMatcher(),
             "LLM": LLM_matcher_approach.LLMMatcher(),
         }
 
@@ -210,6 +212,8 @@ class BenchmarkRunner:
                     resolved.append("Embedding")
                 elif clean.lower() in ("lcs", "longest_common_substring"):
                     resolved.append("LCS")
+                elif clean.lower() in ("lcs-embedding", "lcs_embedding", "lcsembedding", "lcs+embedding", "hybrid"):
+                    resolved.append("LCS-Embedding")
                 elif clean.lower() in ("llm", "ai", "model"):
                     resolved.append("LLM")
                 else:
@@ -321,7 +325,7 @@ class BenchmarkRunner:
 
         # Overview Table
         headers = ["Approach", "Total", "TP", "FP", "TN", "FN", "Accuracy", "Precision", "Recall", "F1-Score", "Time (s)"]
-        header_fmt = "{:<12} {:>6} {:>5} {:>5} {:>5} {:>5} {:>9} {:>10} {:>8} {:>9} {:>9}"
+        header_fmt = "{:<15} {:>6} {:>5} {:>5} {:>5} {:>5} {:>9} {:>10} {:>8} {:>9} {:>9}"
         print(header_fmt.format(*headers))
         print("-" * 90)
 
@@ -462,13 +466,14 @@ def run_benchmark(
 def main() -> None:
     """CLI entry point for benchmark_runner."""
     parser = argparse.ArgumentParser(
-        description="Benchmark runner for API field dependency detection approaches (LCS, Embedding, LLM).",
+        description="Benchmark runner for API field dependency detection approaches (LCS, Embedding, LCS-Embedding, LLM).",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""Examples:
   python benchmark_runner.py testcases.json
   python benchmark_runner.py testcases.json LCS
   python benchmark_runner.py testcases.json LCS Embedding
-  python benchmark_runner.py testcases.json LCS Embedding LLM
+  python benchmark_runner.py testcases.json LCS-Embedding
+  python benchmark_runner.py testcases.json LCS Embedding LCS-Embedding LLM
   python benchmark_runner.py -f testcases.json -a LCS,Embedding -o results.json
   python benchmark_runner.py testcases.json all --show-details
 """,
@@ -484,7 +489,7 @@ def main() -> None:
         "approaches",
         nargs="*",
         default=None,
-        help="One or more approaches to evaluate: LCS, Embedding, LLM, or 'all'.",
+        help="One or more approaches to evaluate: LCS, Embedding, LCS-Embedding, LLM, or 'all'.",
     )
     parser.add_argument(
         "-f", "--file", "--testcases-file",
@@ -496,7 +501,7 @@ def main() -> None:
         "-a", "--approaches-flag",
         dest="flag_approaches",
         default=None,
-        help="Comma or space-separated list of approaches (e.g. 'LCS,Embedding,LLM').",
+        help="Comma or space-separated list of approaches (e.g. 'LCS,Embedding,LCS-Embedding,LLM').",
     )
     parser.add_argument(
         "-o", "--output",
