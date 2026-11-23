@@ -291,17 +291,14 @@ def evaluate_cookie_atomic_dep(
     producer_method: str = "",
     consumer_method: str = "",
 ) -> bool:
-    """Evaluate dependency in HTTP cookie."""
-    if not cookie_value or not atomic.value:
+    """Evaluate dependency in HTTP cookie using LCS matching regardless of active mode."""
+    if not cookie_value or not atomic.value or atomic.value != cookie_value or cookie_name is None:
         return False
-    
+
     if "Authorization" in cookie_name:
-        return atomic.value == cookie_value
-    return general_atomic_comparison(
-        atomic, cookie_value, cookie_name, father, from_url,
-        consumer_url=consumer_url, location="cookie",
-        producer_method=producer_method, consumer_method=consumer_method,
-    )
+        return True
+
+    return _name_match(cookie_name, atomic.name, father, from_url)
 
 
 def evaluate_url_atomic_dep(
