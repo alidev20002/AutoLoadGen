@@ -220,18 +220,6 @@ def build_base_doc(entries: list[Entry]) -> ET.ElementTree:
     tht.append(_build_thread_group())
 
     ght = ET.SubElement(tht, "hashTree")
-    hm = ET.Element(
-        "HeaderManager",
-        {
-            "guiclass": "HeaderPanel",
-            "testclass": "HeaderManager",
-            "testname": "HTTP Header Manager",
-            "enabled": "true",
-        },
-    )
-    ET.SubElement(hm, "collectionProp", {"name": "HeaderManager.headers"})
-    ght.append(hm)
-    ET.SubElement(ght, "hashTree")
 
     for entry in entries:
         if (entry.request.url or "").lower().startswith(("ws://", "wss://")):
