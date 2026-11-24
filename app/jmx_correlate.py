@@ -148,40 +148,61 @@ def replace_url(sampler: ET.Element, deps: list[Edge], node: MyNode) -> None:
     path_elem.text = new_full_url
 
 
-def replace_headers(sampler: ET.Element, deps: list[Edge]) -> None:
-    """Update HeaderManager headers in sampler with correlation variables."""
-    for prop in sampler.iter("elementProp"):
-        if prop.get("name") != "HTTPSampler.header_manager":
+def replace_headers(sampler_ht: ET.Element | None, deps: list[Edge]) -> None:
+    """Update HeaderManager headers in sampler hashTree with correlation variables."""
+    if sampler_ht is None:
+        return
+    for hm in sampler_ht:
+        if hm.tag != "HeaderManager":
             continue
-        for h in prop.iter("elementProp"):
-            hname = h.get("name", "")
-            if (hname or "").lower() in ("cookie", "set-cookie"):
+        for coll in hm:
+            if coll.tag != "collectionProp":
                 continue
-            for edge in deps:
-                if edge.type != "header" or not edge.dependency or hname != edge.header_name:
+            for h in coll:
+                if h.tag != "elementProp":
                     continue
-                var_ref = _build_var_ref(edge.dependency.name, edge.from_index, edge.dependency.value)
-                if hname == "Authorization" and edge.dependency.value not in (MANUALLY_INSERTED, MANUALLY_CSV):
-                    var_ref = f"Bearer {var_ref}"
-                for sp in h:
-                    if sp.tag == "stringProp" and sp.get("name") == "Header.value":
-                        sp.text = var_ref
+                hname = h.get("name", "")
+                if not hname:
+                    name_sp = _get_string_prop(h, "Header.name")
+                    hname = name_sp.text if name_sp is not None and name_sp.text else ""
+                if (hname or "").lower() in ("cookie", "set-cookie"):
+                    continue
+                for edge in deps:
+                    if edge.type != "header" or not edge.dependency or hname != edge.header_name:
+                        continue
+                    var_ref = _build_var_ref(edge.dependency.name, edge.from_index, edge.dependency.value)
+                    if hname == "Authorization" and edge.dependency.value not in (MANUALLY_INSERTED, MANUALLY_CSV):
+                        var_ref = f"Bearer {var_ref}"
+                    for sp in h:
+                        if sp.tag == "stringProp" and sp.get("name") == "Header.value":
+                            sp.text = var_ref
 
 
-def _ensure_header_manager(sampler: ET.Element) -> tuple[ET.Element, ET.Element]:
-    for prop in sampler:
-        if prop.tag == "elementProp" and prop.get("name") == "HTTPSampler.header_manager":
-            for coll in prop:
+def _ensure_header_manager(sampler_ht: ET.Element) -> tuple[ET.Element, ET.Element]:
+    for child in sampler_ht:
+        if child.tag == "HeaderManager":
+            for coll in child:
                 if coll.tag == "collectionProp":
-                    return prop, coll
-    mgr = ET.Element("elementProp", {"name": "HTTPSampler.header_manager", "elementType": "HeaderManager"})
-    coll = ET.SubElement(mgr, "collectionProp", {"name": "HeaderManager.headers"})
-    sampler.append(mgr)
-    return mgr, coll
+                    return child, coll
+    hm = ET.Element(
+        "HeaderManager",
+        {
+            "guiclass": "HeaderPanel",
+            "testclass": "HeaderManager",
+            "testname": "HTTP Header Manager",
+            "enabled": "true",
+        },
+    )
+    coll = ET.SubElement(hm, "collectionProp", {"name": "HeaderManager.headers"})
+    sampler_ht.append(hm)
+    ET.SubElement(sampler_ht, "hashTree")
+    return hm, coll
 
 
-def replace_cookies(sampler: ET.Element, deps: list[Edge]) -> None:
+def replace_cookies(sampler_ht: ET.Element | None, deps: list[Edge]) -> None:
     """Inject Cookie header containing correlated cookie variables."""
+    if sampler_ht is None:
+        return
     cookie_edges = [e for e in deps if e.type == "cookie" and e.dependency is not None]
     if not cookie_edges:
         return
@@ -199,17 +220,26 @@ def replace_cookies(sampler: ET.Element, deps: list[Edge]) -> None:
     ]
     cookie_str = "; ".join(pairs)
 
-    for prop in sampler.iter("elementProp"):
-        if prop.get("name") != "HTTPSampler.header_manager":
+    for hm in sampler_ht:
+        if hm.tag != "HeaderManager":
             continue
-        for h in prop.iter("elementProp"):
-            if (h.get("name", "") or "").lower() == "cookie":
-                for sp in h:
-                    if sp.tag == "stringProp" and sp.get("name") == "Header.value":
-                        sp.text = cookie_str
-                return
+        for coll in hm:
+            if coll.tag != "collectionProp":
+                continue
+            for h in coll:
+                if h.tag != "elementProp":
+                    continue
+                hname = h.get("name", "")
+                if not hname:
+                    name_sp = _get_string_prop(h, "Header.name")
+                    hname = name_sp.text if name_sp is not None and name_sp.text else ""
+                if (hname or "").lower() == "cookie":
+                    for sp in h:
+                        if sp.tag == "stringProp" and sp.get("name") == "Header.value":
+                            sp.text = cookie_str
+                    return
 
-    _, coll = _ensure_header_manager(sampler)
+    _, coll = _ensure_header_manager(sampler_ht)
     header_elem = ET.SubElement(coll, "elementProp", {"name": "Cookie", "elementType": "Header"})
     name_sp = ET.SubElement(header_elem, "stringProp", {"name": "Header.name"})
     name_sp.text = "Cookie"
@@ -525,8 +555,8 @@ def correlate(
 
         deps = graph.deps_by_node(node)
         replace_url(sampler, deps, node)
-        replace_headers(sampler, deps)
-        replace_cookies(sampler, deps)
+        replace_headers(sht, deps)
+        replace_cookies(sht, deps)
         replace_args(sampler, deps)
         replace_json_body(sampler, sht, deps, node)
 

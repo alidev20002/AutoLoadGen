@@ -103,7 +103,15 @@ def apply_workload(
                 ht[i] = utg
 
     top_hash_tree = root.find("hashTree")
-    if top_hash_tree is not None and not any(c.tag == "CookieManager" for c in top_hash_tree):
+    test_plan_ht: ET.Element | None = None
+    if top_hash_tree is not None:
+        children = list(top_hash_tree)
+        for i, child in enumerate(children):
+            if child.tag == "TestPlan" and i + 1 < len(children) and children[i + 1].tag == "hashTree":
+                test_plan_ht = children[i + 1]
+                break
+
+    if test_plan_ht is not None and not any(c.tag == "CookieManager" for c in test_plan_ht):
         cm = ET.Element(
             "CookieManager",
             {
@@ -118,6 +126,7 @@ def apply_workload(
         b1.text = "true"
         b2 = ET.SubElement(cm, "boolProp", {"name": "CookieManager.controlledByThreadGroup"})
         b2.text = "false"
-        top_hash_tree.append(cm)
+        test_plan_ht.append(cm)
+        test_plan_ht.append(ET.Element("hashTree"))
 
     return tree

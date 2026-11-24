@@ -86,11 +86,16 @@ def _build_body_arguments(body: str) -> ET.Element:
 
 
 def _build_header_manager(headers: list) -> ET.Element | None:
-    prop = ET.Element(
-        "elementProp",
-        {"name": "HTTPSampler.header_manager", "elementType": "HeaderManager"},
+    hm = ET.Element(
+        "HeaderManager",
+        {
+            "guiclass": "HeaderPanel",
+            "testclass": "HeaderManager",
+            "testname": "HTTP Header Manager",
+            "enabled": "true",
+        },
     )
-    coll = ET.SubElement(prop, "collectionProp", {"name": "HeaderManager.headers"})
+    coll = ET.SubElement(hm, "collectionProp", {"name": "HeaderManager.headers"})
     count = 0
     for h in headers:
         if not h.name or h.name.lower() in EXCLUDED_HEADERS:
@@ -99,7 +104,7 @@ def _build_header_manager(headers: list) -> ET.Element | None:
         _add_string_prop(hp, "Header.name", h.name)
         _add_string_prop(hp, "Header.value", h.value)
         count += 1
-    return prop if count > 0 else None
+    return hm if count > 0 else None
 
 
 def _build_http_sampler(entry: Entry) -> ET.Element | None:
@@ -137,10 +142,6 @@ def _build_http_sampler(entry: Entry) -> ET.Element | None:
     if method in ("POST", "PUT", "PATCH") and entry.request.postData is not None:
         _add_bool_prop(sampler, "HTTPSampler.postBodyRaw", "true")
         sampler.append(_build_body_arguments(entry.request.postData.text or ""))
-
-    header_mgr = _build_header_manager(entry.request.headers)
-    if header_mgr is not None:
-        sampler.append(header_mgr)
 
     return sampler
 
@@ -238,7 +239,11 @@ def build_base_doc(entries: list[Entry]) -> ET.ElementTree:
         sampler = _build_http_sampler(entry)
         if sampler is not None:
             ght.append(sampler)
-            ET.SubElement(ght, "hashTree")
+            sht = ET.SubElement(ght, "hashTree")
+            header_mgr = _build_header_manager(entry.request.headers)
+            if header_mgr is not None:
+                sht.append(header_mgr)
+                ET.SubElement(sht, "hashTree")
 
     return ET.ElementTree(root)
 
