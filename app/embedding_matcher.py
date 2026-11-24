@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import re
 from functools import lru_cache
-from typing import Any
 from urllib.parse import urlsplit
 from pathlib import Path
 import numpy as np
@@ -110,7 +109,7 @@ def _normalize_endpoint(endpoint: str, field_value: str | None = None) -> str:
     ]
 
     # Keep up to the last two meaningful resource segments for concise context.
-    selected = meaningful_parts[-1:] if meaningful_parts else []
+    selected = meaningful_parts[-2:] if meaningful_parts else []
     return _normalize_field(" ".join(selected))
 
 
