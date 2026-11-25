@@ -40,13 +40,29 @@ if STATIC_DIR.is_dir():
     app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 
+@app.middleware("http")
+async def no_cache_static(request, call_next):
+    """Prevent browsers from serving stale static JS/CSS after UI updates."""
+    response = await call_next(request)
+    if request.url.path.startswith("/static/"):
+        response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    return response
+
+
 @app.get("/", include_in_schema=False)
 def index():
-    """Serve the single-page frontend application."""
+    """Serve the single-page frontend application with cache-busted asset URLs."""
     index_file = STATIC_DIR / "index.html"
     if index_file.is_file():
-        return FileResponse(
-            str(index_file),
+        html = index_file.read_text(encoding="utf-8")
+        css_file = STATIC_DIR / "styles.css"
+        js_file = STATIC_DIR / "app.js"
+        if css_file.is_file():
+            html = html.replace("/static/styles.css", f"/static/styles.css?v={int(css_file.stat().st_mtime)}")
+        if js_file.is_file():
+            html = html.replace("/static/app.js", f"/static/app.js?v={int(js_file.stat().st_mtime)}")
+        return Response(
+            content=html,
             media_type="text/html",
             headers={"Cache-Control": "no-cache, no-store, must-revalidate"},
         )
