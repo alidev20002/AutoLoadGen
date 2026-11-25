@@ -292,12 +292,18 @@ $("#autoJmxBtn").onclick = async () => {
 };
 
 /* ---------- graph helpers ---------- */
-function shortPath(url) {
+function endpointPath(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "/";
   try {
-    const u = new URL(url);
-    let p = u.pathname + (u.search ? "?" + u.search.slice(1, 40) : "");
-    return p.length > 34 ? p.slice(0, 33) + "…" : p || "/";
-  } catch { return (url || "?").slice(0, 36); }
+    const u = new URL(raw);
+    return (u.origin && u.origin !== "null" ? u.origin : "") + (u.pathname || "/");
+  } catch {
+    return raw.split(/[?#]/)[0] || "/";
+  }
+}
+function shortPath(url) {
+  return endpointPath(url);
 }
 function hostOf(url) {
   try { return new URL(url).host; } catch { return ""; }
@@ -929,21 +935,59 @@ function render() {
     const idxT = el("text", { x: NW - 14, y: 29, "text-anchor": "end", "font-size": 11.5, "font-weight": 800, fill: TP().sub }, g);
     idxT.textContent = "N" + i;
 
-    // Path / Title
-    const pathT = el("text", { x: 18, y: 58, "font-size": 13, "font-weight": 700, fill: TP().title }, g);
-    pathT.textContent = isCsv
-      ? ("📄 " + String(n.filename || "csv").split("/").pop()).slice(0, 28)
-      : shortPath(r.url || "").slice(0, 30);
+    // Path / Title (full endpoint path without query params, wrapped/fitted inside node box)
+    const maxTextW = NW - 32;
+    const rawTitle = isCsv
+      ? ("📄 " + String(n.filename || "csv").split("/").pop())
+      : endpointPath(r.url || "/");
+    const pathT = el("text", { x: 18, y: 56, "font-size": 13, "font-weight": 700, fill: TP().title }, g);
+    pathT.textContent = rawTitle;
+    let twoLines = false;
+    if (typeof pathT.getComputedTextLength === "function" && pathT.getComputedTextLength() > maxTextW) {
+      twoLines = true;
+      pathT.setAttribute("font-size", "12");
+      pathT.setAttribute("y", "50");
+      let splitAt = -1;
+      for (let k = rawTitle.length - 1; k > 1; k--) {
+        pathT.textContent = rawTitle.slice(0, k);
+        if (pathT.getComputedTextLength() <= maxTextW) {
+          const slashIdx = rawTitle.lastIndexOf("/", k);
+          splitAt = slashIdx > 1 ? slashIdx : k;
+          break;
+        }
+      }
+      if (splitAt <= 1) splitAt = Math.min(28, rawTitle.length);
+      const line1 = rawTitle.slice(0, splitAt);
+      let line2 = rawTitle.slice(splitAt);
+      pathT.textContent = line1;
+      const pathT2 = el("text", { x: 18, y: 65, "font-size": 12, "font-weight": 700, fill: TP().title }, g);
+      pathT2.textContent = line2;
+      if (pathT2.getComputedTextLength() > maxTextW) {
+        while (line2.length > 1 && pathT2.getComputedTextLength() > maxTextW) {
+          line2 = line2.slice(0, -1);
+          pathT2.textContent = line2 + "…";
+        }
+      }
+      el("title", {}, pathT2).textContent = rawTitle;
+    }
+    el("title", {}, pathT).textContent = rawTitle;
 
     // Host & Indices
-    const hostT = el("text", { x: 18, y: 77, "font-size": 11, fill: TP().sub }, g);
+    const hostT = el("text", { x: 18, y: twoLines ? 83 : 76, "font-size": 11, fill: TP().sub }, g);
     const q = (r.queryParams || []).length, h = (r.headers || []).length;
-    hostT.textContent = isCsv
-      ? `vars=${(n.variablesName || "").slice(0, 28)}`
-      : `${hostOf(r.url || "").slice(0, 28)} · idx=${(n.indexs || []).join(",") || "—"} · H${h}/Q${q}`;
+    let hostLine = isCsv
+      ? `vars=${n.variablesName || ""}`
+      : `${hostOf(r.url || "")} · idx=${(n.indexs || []).join(",") || "—"} · H${h}/Q${q}`;
+    hostT.textContent = hostLine;
+    if (typeof hostT.getComputedTextLength === "function" && hostT.getComputedTextLength() > maxTextW) {
+      while (hostLine.length > 1 && hostT.getComputedTextLength() > maxTextW) {
+        hostLine = hostLine.slice(0, -1);
+        hostT.textContent = hostLine + "…";
+      }
+    }
 
     // Dependencies in/out counter
-    const stT = el("text", { x: 18, y: 95, "font-size": 11, "font-weight": 600, fill: TP().sub }, g);
+    const stT = el("text", { x: 18, y: twoLines ? 99 : 95, "font-size": 11, "font-weight": 600, fill: TP().sub }, g);
     stT.textContent = `↓ ${st.in} in · ↑ ${st.out} out`;
 
     // Interactive Hover & Focus
@@ -1094,14 +1138,12 @@ function clip(v, max = 48) {
   return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
 }
 /* Short but complete endpoint name: METHOD + path (CSV file for data sources) */
-function endpointLabel(i, max = 46) {
+function endpointLabel(i) {
   const n = i >= 0 && state.graph ? state.graph.nodes[i] : null;
   if (!n) return "not recorded";
   if (isCsvNode(n)) return `CSV file ${clip(String(n.filename || "data.csv").split("/").pop(), 30)}`;
   const r = n.request || {};
-  let path = r.url || "/";
-  try { const u = new URL(path); path = u.pathname + (u.search || ""); } catch {}
-  return `${r.method || "GET"} ${clip(path, max)}`;
+  return `${r.method || "GET"} ${endpointPath(r.url || "/")}`;
 }
 /* Where each dependency type lands in the consumer request */
 const EDGE_TYPE_INFO = {
@@ -1150,7 +1192,7 @@ function nodeTipHtml(n, i) {
   const r = n.request || {};
   const body = r.postData ? clip(r.postData.mimeType || "body", 30) : "";
   return `<div class="tt">⬢ Node ${i} · ${esc(r.method || "?")} endpoint</div>
-    <div class="dep-url" title="${esc(r.url || "")}">${esc(clip(r.url || "—", 90))}</div>
+    <div class="dep-url" title="${esc(r.url || "")}">${esc(endpointPath(r.url || "/"))}</div>
     <div class="tt-meta">${(r.headers || []).length} headers · ${(r.queryParams || []).length} query params · ${(r.cookies || []).length} cookies${body ? " · " + esc(body) : ""}</div>
     <div class="tt-deps"><span class="in">↓ ${incoming.length} incoming</span><span class="out">↑ ${outgoing.length} outgoing</span></div>
     <div class="tt-hint">click to keep this popup open</div>`;
@@ -1253,7 +1295,7 @@ function renderDetail() {
     const r = n.request || {};
     box.innerHTML = `<div class="edge-row sel">
       <div class="er-top"><b>⬢ Node ${s.id} · ${esc(r.method || "?")}</b></div>
-      <div class="dep-url" title="${esc(r.url || "")}">${esc(clip(r.url || "—", 120))}</div>
+      <div class="dep-url" title="${esc(r.url || "")}">${esc(endpointPath(r.url || "/"))}</div>
       <div class="muted small">${(r.headers || []).length} headers · ${(r.queryParams || []).length} query params · ${(r.cookies || []).length} cookies${r.postData ? " · body " + esc(clip(r.postData.mimeType || "", 30)) : ""}</div>
       <div class="dep-sec"><b class="in">↓ ${incoming.length} incoming</b>${depList(incoming, "in")}</div>
       <div class="dep-sec"><b class="out">↑ ${outgoing.length} outgoing</b>${depList(outgoing, "out")}</div>
