@@ -302,8 +302,20 @@ function endpointPath(url) {
     return raw.split(/[?#]/)[0] || "/";
   }
 }
+function endpointPathOnly(url) {
+  const raw = String(url || "").trim();
+  if (!raw) return "/";
+  try {
+    return new URL(raw).pathname || "/";
+  } catch {
+    const noQuery = raw.split(/[?#]/)[0];
+    const m = noQuery.match(/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\/[^/]+(\/.*)?$/);
+    if (m) return m[1] || "/";
+    return noQuery || "/";
+  }
+}
 function shortPath(url) {
-  return endpointPath(url);
+  return endpointPathOnly(url);
 }
 function hostOf(url) {
   try { return new URL(url).host; } catch { return ""; }
@@ -1138,12 +1150,13 @@ function clip(v, max = 48) {
   return s.length > max ? s.slice(0, max - 1).trimEnd() + "…" : s;
 }
 /* Short but complete endpoint name: METHOD + path (CSV file for data sources) */
-function endpointLabel(i) {
+function endpointLabel(i, withBase = false) {
   const n = i >= 0 && state.graph ? state.graph.nodes[i] : null;
   if (!n) return "not recorded";
   if (isCsvNode(n)) return `CSV file ${clip(String(n.filename || "data.csv").split("/").pop(), 30)}`;
   const r = n.request || {};
-  return `${r.method || "GET"} ${endpointPath(r.url || "/")}`;
+  const path = withBase ? endpointPath(r.url || "/") : endpointPathOnly(r.url || "/");
+  return `${r.method || "GET"} ${path}`;
 }
 /* Where each dependency type lands in the consumer request */
 const EDGE_TYPE_INFO = {
@@ -1167,12 +1180,12 @@ function consumerField(e) {
 function edgeValue(e) {
   return oneLine(e.structuredObject?.value ?? e.dependency?.value ?? "");
 }
-function dependencySentence(e) {
+function dependencySentence(e, withBase = false) {
   const { from, to } = edgeEndpoints(e);
   const info = edgeTypeInfo(e);
-  return `The field <b>${esc(clip(producerField(e), 44))}</b> of node <b>${esc(endpointLabel(from))}</b> ` +
+  return `The field <b>${esc(clip(producerField(e), 44))}</b> of node <b>${esc(endpointLabel(from, withBase))}</b> ` +
     `has a dependency to the field <b>${esc(clip(consumerField(e), 44))}</b> of node ` +
-    `<b>${esc(endpointLabel(to))}</b> in its ${esc(info.where)}.`;
+    `<b>${esc(endpointLabel(to, withBase))}</b> in its ${esc(info.where)}.`;
 }
 function dependencyValueRow(value, max = 72) {
   return `<div class="dep-val-row"><span class="dep-key">value</span>` +
@@ -1200,7 +1213,7 @@ function nodeTipHtml(n, i) {
 function edgeTipHtml(e, id) {
   const wholeObject = !!e.structuredObject && !e.primitive;
   return `<div class="tt">🔗 Dependency ${id} · ${esc(edgeTypeInfo(e).label)}</div>
-    <div class="dep-sentence">${dependencySentence(e)}</div>
+    <div class="dep-sentence">${dependencySentence(e, true)}</div>
     ${dependencyValueRow(edgeValue(e))}
     ${wholeObject ? `<div class="tt-meta">The whole JSON object is passed, not a single field.</div>` : ""}
     <div class="tt-hint">click to keep this popup open</div>`;
@@ -1278,7 +1291,7 @@ function renderDetail() {
         const other = dir === "in" ? ep.from : ep.to;
         return `<li><span class="dep-dot" style="background:${EDGE_COLORS[e.type] || "#888"}"></span>
           <b>${esc(clip(edgeKey(e), 34))}</b> <span class="muted">(${esc(edgeTypeInfo(e).where)})</span>
-          ${dir === "in" ? "from" : "to"} ${esc(endpointLabel(other, 34))}</li>`;
+          ${dir === "in" ? "from" : "to"} ${esc(endpointLabel(other, false))}</li>`;
       }).join("");
       return `<ul class="dep-list">${rows}${arr.length > 8 ? `<li class="muted">… ${arr.length - 8} more</li>` : ""}</ul>`;
     };
@@ -1295,7 +1308,7 @@ function renderDetail() {
     const r = n.request || {};
     box.innerHTML = `<div class="edge-row sel">
       <div class="er-top"><b>⬢ Node ${s.id} · ${esc(r.method || "?")}</b></div>
-      <div class="dep-url" title="${esc(r.url || "")}">${esc(endpointPath(r.url || "/"))}</div>
+      <div class="dep-url" title="${esc(r.url || "")}">${esc(endpointPathOnly(r.url || "/"))}</div>
       <div class="muted small">${(r.headers || []).length} headers · ${(r.queryParams || []).length} query params · ${(r.cookies || []).length} cookies${r.postData ? " · body " + esc(clip(r.postData.mimeType || "", 30)) : ""}</div>
       <div class="dep-sec"><b class="in">↓ ${incoming.length} incoming</b>${depList(incoming, "in")}</div>
       <div class="dep-sec"><b class="out">↑ ${outgoing.length} outgoing</b>${depList(outgoing, "out")}</div>
@@ -1558,8 +1571,8 @@ function updateEditHint() {
   const prod = $("#editProducerField")?.value.trim() || "—";
   const cons = $("#editConsumerField")?.value.trim() || "—";
   const val = oneLine($("#editCommonValue")?.value ?? "");
-  box.innerHTML = `The field <b>${esc(clip(prod, 40))}</b> of <b>${esc(endpointLabel(from, 36))}</b> ` +
-    `maps to <b>${esc(clip(cons, 40))}</b> of <b>${esc(endpointLabel(to, 36))}</b> in its ${esc(info.where)}` +
+  box.innerHTML = `The field <b>${esc(clip(prod, 40))}</b> of <b>${esc(endpointLabel(from, false))}</b> ` +
+    `maps to <b>${esc(clip(cons, 40))}</b> of <b>${esc(endpointLabel(to, false))}</b> in its ${esc(info.where)}` +
     `${val ? ` (value: <code>${esc(clip(val, 40))}</code>)` : ""}.`;
 }
 ["editType", "editProducerField", "editConsumerField", "editCommonValue"].forEach((elId) => {
@@ -1578,7 +1591,7 @@ window.openEdit = (id) => {
   const { from, to } = edgeEndpoints(e);
   $("#editEdgeId").textContent = `edge ${id}`;
   $("#editEndpointsDesc").innerHTML =
-    `<b>Producer:</b> ${esc(endpointLabel(from, 44))} &rarr; <b>Consumer:</b> ${esc(endpointLabel(to, 44))}`;
+    `<b>Producer:</b> ${esc(endpointLabel(from, false))} &rarr; <b>Consumer:</b> ${esc(endpointLabel(to, false))}`;
   const curType = EDGE_TYPE_INFO[e.type] ? e.type : "url";
   $("#editType").value = curType;
   const prodVal = e.dependency?.name ?? e.structuredObject?.name ?? "";
