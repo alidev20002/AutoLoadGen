@@ -169,25 +169,83 @@ def add_edge(
     return edge
 
 
+def _get_consumer_field(edge: Edge) -> str:
+    if edge.type == "url":
+        return edge.subPath
+    if edge.type == "header":
+        return edge.header_name
+    if edge.type == "queryparam":
+        return edge.query_param_name
+    return edge.name
+
+
+def _set_consumer_field(edge: Edge, edge_type: str, field_name: str) -> None:
+    edge.subPath = ""
+    edge.header_name = ""
+    edge.query_param_name = ""
+    edge.name = ""
+    if edge_type == "url":
+        edge.subPath = field_name
+    elif edge_type == "header":
+        edge.header_name = field_name
+    elif edge_type == "queryparam":
+        edge.query_param_name = field_name
+    else:
+        edge.name = field_name
+
+
 def edit_edge(
     graph: DependencyGraph,
     edge_id: int,
     key: str | None = None,
     value: str | None = None,
+    edge_type: str | None = None,
+    consumer_field: str | None = None,
+    producer_field: str | None = None,
+    common_value: str | None = None,
 ) -> Edge:
     """Modify parameters of an existing dependency edge."""
     edge = graph.edges[edge_id]
-    if key is not None:
-        if edge.type == "url":
-            edge.subPath = key
-        elif edge.type == "header":
-            edge.header_name = key
-        elif edge.type == "queryparam":
-            edge.query_param_name = key
-        else:
-            edge.name = key
 
-    if value is not None and edge.dependency is not None:
-        edge.dependency.name = value
+    if edge_type is not None:
+        if edge_type not in SUPPORTED_EDGE_TYPES:
+            raise ValueError(f"Invalid edge type '{edge_type}'. Supported: {SUPPORTED_EDGE_TYPES}")
+        target_type = edge_type
+    else:
+        target_type = edge.type
+
+    resolved_consumer = consumer_field if consumer_field is not None else key
+    if resolved_consumer is not None:
+        _set_consumer_field(edge, target_type, resolved_consumer)
+        edge.type = target_type
+    elif edge_type is not None and edge_type != edge.type:
+        existing_consumer = _get_consumer_field(edge)
+        _set_consumer_field(edge, target_type, existing_consumer)
+        edge.type = target_type
+
+    resolved_producer = producer_field if producer_field is not None else value
+    if resolved_producer is not None:
+        if edge.dependency is not None:
+            edge.dependency.name = resolved_producer
+        if edge.structured is not None:
+            edge.structured.name = resolved_producer
+        if edge.dependency is None and edge.structured is None:
+            edge.dependency = AtomicObject(
+                value=common_value if common_value is not None else "",
+                name=resolved_producer,
+                xpath="",
+            )
+
+    if common_value is not None:
+        if edge.dependency is not None:
+            edge.dependency.value = common_value
+        if edge.structured is not None:
+            edge.structured.value = common_value
+        if edge.dependency is None and edge.structured is None:
+            edge.dependency = AtomicObject(
+                value=common_value,
+                name=resolved_producer or "",
+                xpath="",
+            )
 
     return edge

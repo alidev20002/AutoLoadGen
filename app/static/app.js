@@ -1496,27 +1496,128 @@ window.deleteEdge = async (id) => {
   hideTip(true);
   afterGraphLoaded();
 };
+function updateEditMeta() {
+  const type = $("#editType")?.value || "url";
+  const m = AE_KEY_META[type] || AE_KEY_META.header;
+  if ($("#editConsumerLabel")) $("#editConsumerLabel").textContent = `Consumer ${m.label.charAt(0).toLowerCase() + m.label.slice(1)} *`;
+  if ($("#editConsumerHelp")) $("#editConsumerHelp").textContent = m.help;
+  if ($("#editConsumerField")) $("#editConsumerField").placeholder = m.ph;
+  if ($("#editTypeHelp")) $("#editTypeHelp").textContent = AE_TYPE_HELP[type] || "";
+}
+function updateEditHint() {
+  const box = $("#editHint");
+  if (!box || !state.graph) return;
+  const id = Number($("#editModal")?.dataset.id);
+  const e = state.graph.edges?.[id];
+  if (!e) { box.textContent = ""; return; }
+  const { from, to } = edgeEndpoints(e);
+  const type = $("#editType")?.value || e.type || "url";
+  const info = EDGE_TYPE_INFO[type] || { where: type };
+  const prod = $("#editProducerField")?.value.trim() || "—";
+  const cons = $("#editConsumerField")?.value.trim() || "—";
+  const val = oneLine($("#editCommonValue")?.value ?? "");
+  box.innerHTML = `The field <b>${esc(clip(prod, 40))}</b> of <b>${esc(endpointLabel(from, 36))}</b> ` +
+    `maps to <b>${esc(clip(cons, 40))}</b> of <b>${esc(endpointLabel(to, 36))}</b> in its ${esc(info.where)}` +
+    `${val ? ` (value: <code>${esc(clip(val, 40))}</code>)` : ""}.`;
+}
+["editType", "editProducerField", "editConsumerField", "editCommonValue"].forEach((elId) => {
+  document.getElementById(elId)?.addEventListener("change", () => {
+    if (elId === "editType") updateEditMeta();
+    updateEditHint();
+  });
+  document.getElementById(elId)?.addEventListener("input", updateEditHint);
+});
+function closeEditModal() {
+  $("#editModal").classList.add("hidden");
+}
 window.openEdit = (id) => {
-  const e = state.graph.edges[id];
+  const e = state.graph?.edges?.[id];
   if (!e) return;
-  $("#editEdgeId").textContent = "edge " + id;
-  $("#editKey").value = edgeKey(e) === "—" ? "" : edgeKey(e);
-  $("#editValue").value = e.dependency?.name || "";
+  const { from, to } = edgeEndpoints(e);
+  $("#editEdgeId").textContent = `edge ${id}`;
+  $("#editEndpointsDesc").innerHTML =
+    `<b>Producer:</b> ${esc(endpointLabel(from, 44))} &rarr; <b>Consumer:</b> ${esc(endpointLabel(to, 44))}`;
+  const curType = EDGE_TYPE_INFO[e.type] ? e.type : "url";
+  $("#editType").value = curType;
+  const prodVal = e.dependency?.name ?? e.structuredObject?.name ?? "";
+  const consVal = consumerField(e);
+  const commonVal = e.structuredObject?.value ?? e.dependency?.value ?? "";
+  $("#editProducerField").value = prodVal === "—" ? "" : prodVal;
+  $("#editConsumerField").value = consVal === "—" ? "" : consVal;
+  $("#editCommonValue").value = commonVal;
+  setStatus($("#editStatus"), "", null);
+  $("#editModal").dataset.id = String(id);
+  updateEditMeta();
+  updateEditHint();
   $("#editModal").classList.remove("hidden");
-  $("#editModal").dataset.id = id;
+  $("#editProducerField").focus();
 };
-$("#editCancel").onclick = () => $("#editModal").classList.add("hidden");
+$("#editCancel").onclick = closeEditModal;
+$("#editX").onclick = closeEditModal;
+$("#editModal").addEventListener("click", (ev) => {
+  if (ev.target === $("#editModal")) closeEditModal();
+});
+document.addEventListener("keydown", (ev) => {
+  if (ev.key === "Escape" && !$("#editModal").classList.contains("hidden")) closeEditModal();
+});
 $("#editSave").onclick = async () => {
   const id = Number($("#editModal").dataset.id);
-  const body = { graph: state.graph, id };
-  if ($("#editKey").value.trim()) body.key = $("#editKey").value.trim();
-  if ($("#editValue").value.trim()) body.value = $("#editValue").value.trim();
-  const r = await fetch("/graphs/edges/edit", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
-  if (!r.ok) return alert("Edit failed: " + (await r.text()).slice(0, 300));
-  const j = await r.json();
-  state.graph = j.graph;
-  $("#editModal").classList.add("hidden");
-  afterGraphLoaded(); select("edge", id);
+  const edgeType = $("#editType").value;
+  const producerField = $("#editProducerField").value.trim();
+  const consumerFieldVal = $("#editConsumerField").value.trim();
+  const commonValue = $("#editCommonValue").value;
+
+  if (!producerField) {
+    setStatus($("#editStatus"), "Enter the producer node field name.", false);
+    $("#editProducerField").focus();
+    return;
+  }
+  if (!consumerFieldVal) {
+    setStatus($("#editStatus"), "Enter the consumer node field name.", false);
+    $("#editConsumerField").focus();
+    return;
+  }
+
+  const saveBtn = $("#editSave");
+  saveBtn.disabled = true;
+  setStatus($("#editStatus"), "Saving changes…", null);
+
+  const body = {
+    graph: state.graph,
+    id,
+    type: edgeType,
+    producer_field: producerField,
+    consumer_field: consumerFieldVal,
+    common_value: commonValue,
+  };
+
+  try {
+    const r = await fetch("/graphs/edges/edit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!r.ok) {
+      setStatus($("#editStatus"), "Edit failed: " + (await r.text()).slice(0, 300), false);
+      return;
+    }
+    const j = await r.json();
+    state.graph = j.graph;
+    state.hiddenTypes.delete(edgeType);
+    const tf = $("#edgeTypeFilter");
+    if (tf && tf.value && tf.value !== edgeType) tf.value = "";
+    closeEditModal();
+    if (pinnedTip && state.graph.edges?.[id]) {
+      pinnedTip.html = edgeTipHtml(state.graph.edges[id], id);
+      tip.innerHTML = pinnedTip.html;
+    }
+    afterGraphLoaded();
+    select("edge", id);
+  } catch (err) {
+    setStatus($("#editStatus"), "Edit failed (network): " + String(err).slice(0, 200), false);
+  } finally {
+    saveBtn.disabled = false;
+  }
 };
 $("#describeBtn").onclick = async () => {
   if (!state.graph) return;

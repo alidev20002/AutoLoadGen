@@ -173,6 +173,10 @@ class EditEdgeRequest(BaseModel):
     edge_id: int = Field(alias="id")
     key: str | None = None
     value: str | None = None
+    edge_type: str | None = Field(default=None, alias="type")
+    consumer_field: str | None = None
+    producer_field: str | None = None
+    common_value: str | None = None
 
     if _HAS_PYDANTIC_V2:
         model_config = ConfigDict(populate_by_name=True)  # type: ignore[misc]
@@ -306,9 +310,20 @@ def edges_edit(body: EditEdgeRequest) -> dict[str, Any]:
     """Edit parameters of an existing edge in the graph."""
     graph = _parse_graph_from_dict(body.graph)
     try:
-        edge = graph_ops.edit_edge(graph, body.edge_id, key=body.key, value=body.value)
+        edge = graph_ops.edit_edge(
+            graph,
+            body.edge_id,
+            key=body.key,
+            value=body.value,
+            edge_type=body.edge_type,
+            consumer_field=body.consumer_field,
+            producer_field=body.producer_field,
+            common_value=body.common_value,
+        )
     except IndexError as exc:
         raise HTTPException(status_code=404, detail=f"Edge {body.edge_id} not found") from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     payload = _format_graph_payload(graph)
     payload["edge"] = _format_edge_info(body.edge_id, edge)

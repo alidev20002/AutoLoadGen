@@ -328,14 +328,52 @@
 </main>
 
 <!-- edit edge modal -->
-<div id="editModal" class="modal hidden">
-  <div class="modal-card glass">
-    <h3>Edit edge <span class="pill" id="editEdgeId"></span> <small class="muted">POST /graphs/edges/edit</small></h3>
-    <label>key <small>(subPath / header_name / query_param_name / name by type)</small></label>
-    <input id="editKey" class="input" />
-    <label>dependency value <small>(dependency.name)</small></label>
-    <input id="editValue" class="input" />
-    <div class="row end"><button class="btn ghost" id="editCancel">Cancel</button><button class="btn primary" id="editSave">Save</button></div>
+<div id="editModal" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="editModalTitle">
+  <div class="modal-card glass wide edit-modal-card">
+    <div class="m-head">
+      <h3 id="editModalTitle">Edit dependency <span class="pill" id="editEdgeId"></span></h3>
+      <button type="button" class="icon-btn" id="editX" data-tip-below="Close" aria-label="Close">✕</button>
+    </div>
+    <div id="editEndpointsDesc" class="form-desc"></div>
+
+    <div class="frow">
+      <label for="editType">Location of dependency in consumer request *</label>
+      <select id="editType" class="input">
+        <option value="url">URL path segment</option>
+        <option value="header">Request header</option>
+        <option value="queryparam">Query parameter</option>
+        <option value="cookie">Cookie</option>
+        <option value="bodyue">Form body field (form data)</option>
+        <option value="bodyjson">JSON body field</option>
+      </select>
+      <div class="field-help" id="editTypeHelp"></div>
+    </div>
+
+    <div class="frow2">
+      <div class="frow">
+        <label for="editProducerField">Producer node field name *</label>
+        <input id="editProducerField" class="input" placeholder="e.g. token" />
+        <div class="field-help" id="editProducerHelp">Field name in the producer's response (also used as the extracted variable name).</div>
+      </div>
+      <div class="frow">
+        <label for="editConsumerField" id="editConsumerLabel">Consumer node field name *</label>
+        <input id="editConsumerField" class="input" placeholder="e.g. Authorization" />
+        <div class="field-help" id="editConsumerHelp"></div>
+      </div>
+    </div>
+
+    <div class="frow">
+      <label for="editCommonValue">Common value <span class="muted small">(shared recorded value)</span></label>
+      <input id="editCommonValue" class="input" placeholder="e.g. eyJhbGci…" />
+      <div class="field-help">The value matched between the producer response and the consumer request.</div>
+    </div>
+
+    <div id="editHint" class="hint"></div>
+    <div id="editStatus" class="status"></div>
+    <div class="row end">
+      <button type="button" class="btn ghost" id="editCancel">Cancel</button>
+      <button type="button" class="btn primary" id="editSave">Save changes</button>
+    </div>
   </div>
 </div>
 
