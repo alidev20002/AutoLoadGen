@@ -1674,11 +1674,6 @@ $("#editSave").onclick = async () => {
     saveBtn.disabled = false;
   }
 };
-$("#describeBtn").onclick = async () => {
-  if (!state.graph) return;
-  const r = await fetch("/graphs/describe", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ graph: state.graph }) });
-  $("#describeOut").textContent = r.ok ? (await r.json()).description : "Error: " + (await r.text()).slice(0, 300);
-};
 
 
 /* ---------- export graph as PNG image ---------- */
