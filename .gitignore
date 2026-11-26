@@ -4,6 +4,6 @@
 *.txt
 /test
 .env
-*/models
+*/cache
 /benchmark
 /testcasegenerator
