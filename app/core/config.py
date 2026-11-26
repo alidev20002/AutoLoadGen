@@ -7,8 +7,8 @@ import os
 from pathlib import Path
 from typing import Any
 
-APP_DIR = Path(__file__).resolve().parent.parent
-CONFIG_PATH = APP_DIR / "configs.json"
+CONFIG_DIR = Path(__file__).resolve().parent
+CONFIG_PATH = CONFIG_DIR / "config.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {
     "llm_provider": "openai",
@@ -87,6 +87,7 @@ def save_config(new_configs: dict[str, Any], path: str | Path = CONFIG_PATH) -> 
     """Persist flat configuration dictionary to disk and update module attributes."""
     global CONFIGS
     target_path = Path(path)
+    target_path.parent.mkdir(parents=True, exist_ok=True)
     CONFIGS.update(new_configs)
     _sync_module_attributes()
 
