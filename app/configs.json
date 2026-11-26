@@ -1,9 +1,0 @@
-{
-  "llm_provider": "openai",
-  "llm_endpoint": "http://185.239.2.48:11434/",
-  "llm_apikey": "",
-  "model": "gemma3:4b",
-  "timeout": 30.0,
-  "fallback_to_lcs": true,
-  "cache_enabled": false
-}
