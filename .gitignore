@@ -5,3 +5,5 @@
 /test
 .env
 */models
+/benchmark
+/testcasegenerator
