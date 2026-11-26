@@ -168,8 +168,6 @@ def check_header(
         ):
             continue
 
-        print(header_name_lower)
-
         for ri in range(req_idx - 1, first - 1, -1):
             source_node = graph.get_node_by_index(ri)
             if source_node is None:
