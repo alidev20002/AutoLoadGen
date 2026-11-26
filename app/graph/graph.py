@@ -7,8 +7,8 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .har_model import Cookie, Header, PostData, QueryParam, Request
-from .response_model import AtomicObject, StructuredObject
+from ..models.har_model import Cookie, Header, PostData, QueryParam, Request
+from ..models.response_model import AtomicObject, StructuredObject
 
 MANUALLY_INSERTED = "manually_inserted"
 MANUALLY_CSV = "manually_csv"

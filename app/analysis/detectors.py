@@ -9,9 +9,9 @@ from urllib.parse import urlparse
 
 from . import schema_client
 from . import validator as V
-from .graph import DependencyGraph, MyNode, make_edge
-from .har_model import Cookie
-from .response_model import AtomicObject, ResponseUnstructured, StructuredObject
+from ..graph.graph import DependencyGraph, MyNode, make_edge
+from ..models.har_model import Cookie
+from ..models.response_model import AtomicObject, ResponseUnstructured, StructuredObject
 
 BLACKLIST_HEADERS = {
     # Browser identification

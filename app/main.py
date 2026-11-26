@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from fastapi import FastAPI, File, Form, HTTPException, Response, UploadFile
-from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
@@ -20,14 +19,14 @@ except ImportError:
     ConfigDict = None  # type: ignore[assignment,misc]
     _HAS_PYDANTIC_V2 = False
 
-from . import config as app_config
-from . import graph_ops
-from .extractor import build_graph
-from .graph import DependencyGraph, Edge
-from .har_model import Entry
-from .jmx_base import build_base_doc
-from .jmx_correlate import correlate
-from .jmx_load import Workload, apply_workload
+from .core import config as app_config
+from .graph import graph_ops
+from .analysis.extractor import build_graph
+from .graph.graph import DependencyGraph, Edge
+from .models.har_model import Entry
+from .jmeter.jmx_base import build_base_doc
+from .jmeter.jmx_correlate import correlate
+from .jmeter.jmx_load import Workload, apply_workload
 
 app = FastAPI(
     title="AutoLoadGen",

@@ -13,7 +13,7 @@ from .graph import (
     MyNode,
     make_edge,
 )
-from .response_model import AtomicObject
+from ..models.response_model import AtomicObject
 
 SUPPORTED_EDGE_TYPES = ("url", "header", "queryparam", "cookie", "bodyue", "bodyjson")
 

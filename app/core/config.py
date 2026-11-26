@@ -7,7 +7,7 @@ import os
 from pathlib import Path
 from typing import Any
 
-APP_DIR = Path(__file__).resolve().parent
+APP_DIR = Path(__file__).resolve().parent.parent
 CONFIG_PATH = APP_DIR / "configs.json"
 
 DEFAULT_CONFIG: dict[str, Any] = {

@@ -6,7 +6,7 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from urllib.parse import parse_qsl, urlparse
 
-from .har_model import Entry
+from ..models.har_model import Entry
 
 EXCLUDED_HEADERS = {
     "host",

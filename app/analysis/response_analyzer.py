@@ -6,8 +6,8 @@ import json
 from typing import Any
 
 from . import schema_client
-from .har_model import Header
-from .response_model import AtomicObject, ResponseUnstructured, StructuredObject
+from ..models.har_model import Header
+from ..models.response_model import AtomicObject, ResponseUnstructured, StructuredObject
 
 
 def _serialize_json_fast(obj: Any) -> str:

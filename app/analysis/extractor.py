@@ -6,10 +6,10 @@ from pathlib import Path
 
 from . import detectors as D
 from . import validator as V
-from .graph import DependencyGraph, MyNode
-from .har_model import Entry, load_har
+from ..graph.graph import DependencyGraph, MyNode
+from ..models.har_model import Entry, load_har
 from .response_analyzer import analyze_response_headers, get_unstructured_response
-from .response_model import ResponseUnstructured
+from ..models.response_model import ResponseUnstructured
 
 
 def analyze_responses(entries: list[Entry]) -> list[ResponseUnstructured]:

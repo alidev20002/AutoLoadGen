@@ -8,7 +8,7 @@ import xml.etree.ElementTree as ET
 from typing import Any
 from urllib.parse import urlparse
 
-from .graph import (
+from ..graph.graph import (
     CSVNode,
     DependencyGraph,
     Edge,
@@ -16,9 +16,9 @@ from .graph import (
     MANUALLY_INSERTED,
     MyNode,
 )
-from .har_model import Entry
+from ..models.har_model import Entry
 from .jmx_base import should_skip
-from .response_model import AtomicObject, StructuredObject
+from ..models.response_model import AtomicObject, StructuredObject
 
 NOT_FOUND_SENTINEL = "NOT_FOUND"
 

@@ -24,7 +24,7 @@ def is_schema_node(obj: Any) -> bool:
     """Check if a dictionary already represents a JSON schema definition."""
     if not isinstance(obj, dict):
         return False
-    
+
     schema_type = obj.get("type")
     return isinstance(schema_type, str) and schema_type in VALID_SCHEMA_TYPES
 

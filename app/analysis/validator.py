@@ -6,12 +6,12 @@ import logging
 from collections.abc import Callable
 from urllib.parse import urlparse
 
-from . import config
-from . import embedding_matcher as _EMBEDDING
-from . import lcs_embedding_matcher as _LCS_EMBEDDING
-from . import llm_matcher as _LLM
-from .lcs_matcher import lc_substr_norm
-from .response_model import AtomicObject, StructuredObject
+from ..core import config
+from ..matchers import embedding_matcher as _EMBEDDING
+from ..matchers import lcs_embedding_matcher as _LCS_EMBEDDING
+from ..matchers import llm_matcher as _LLM
+from ..matchers.lcs_matcher import lc_substr_norm
+from ..models.response_model import AtomicObject, StructuredObject
 
 logger = logging.getLogger(__name__)
 
@@ -227,6 +227,7 @@ def _embedding_name_match(
         consumer_field=to_name,
         consumer_value=value,
     )
+
     if res is not None:
         return res
     if config.fallback_to_lcs and lcs_fallback is not None:
@@ -271,7 +272,7 @@ def evaluate_header_atomic_dep(
     """Evaluate dependency in HTTP request header."""
     if not header_value or not atomic.value:
         return False
-    
+
     if header_name == "Authorization" and header_value.startswith("Bearer "):
         return atomic.value == header_value[7:]
     return general_atomic_comparison(
@@ -313,7 +314,7 @@ def evaluate_url_atomic_dep(
     """Evaluate dependency in URL path segment."""
     if not atomic.value:
         return False
-    
+
     if _LLM_ENABLED:
         return _llm_name_match(
             atomic, father, possible_name, from_url,

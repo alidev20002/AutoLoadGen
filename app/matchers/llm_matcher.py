@@ -6,7 +6,7 @@ import logging
 from functools import lru_cache
 from typing import Any
 
-from . import config
+from ..core import config
 from .prompts import get_prompt_template
 
 try:

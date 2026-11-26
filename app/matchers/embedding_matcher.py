@@ -18,8 +18,8 @@ SIMILARITY_THRESHOLD = 0.6
 DEFAULT_EMBEDDING_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-BASE_DIR = Path(__file__).resolve().parent
-MODEL_DIR = BASE_DIR / "models" / "all-MiniLM-L6-v2"
+BASE_DIR = Path(__file__).resolve().parent.parent
+MODEL_DIR = BASE_DIR / "cache" / "all-MiniLM-L6-v2"
 
 REQUIRED_FILES = [
     "model.safetensors",
